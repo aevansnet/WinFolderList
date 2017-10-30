@@ -1,4 +1,5 @@
-﻿using GalaSoft.MvvmLight;
+﻿using System.Threading.Tasks;
+using GalaSoft.MvvmLight;
 
 namespace WinFolderList.ViewModel
 {
@@ -15,7 +16,19 @@ namespace WinFolderList.ViewModel
         /// </summary>
         public MainViewModel()
         {
-          
+
+            //var _mq = new FileInformationQueue();
+            //var _fs = new FileSystemAccessService();
+
+            ////var _q = new MockQueue();
+
+            //var walker = new TreeWalker(_fs, _mq);
+
+
+            //Task.Run(() =>walker.WalkTree(@"c:\"));
+
+
+
         }
 
         ////public override void Cleanup()
