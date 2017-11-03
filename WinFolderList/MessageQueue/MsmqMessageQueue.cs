@@ -67,13 +67,12 @@ namespace WinFolderList
 
         private bool CheckForService()
         {
-            List<ServiceController> services = ServiceController.GetServices().ToList();
-            ServiceController msQue = services.Find(o => o.ServiceName == "MSMQ");
-            if (msQue != null && msQue.Status == ServiceControllerStatus.Running)
-            {
-                return true;
-            }
-            return false;
+            // crudely check if msmq is installed and running..
+
+            var msmqService = ServiceController.GetServices()
+                .FirstOrDefault(s => s.ServiceName == "MSMQ");
+
+            return msmqService != null && msmqService.Status == ServiceControllerStatus.Running;
         }
 
     }

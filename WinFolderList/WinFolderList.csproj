@@ -77,12 +77,12 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </ApplicationDefinition>
-    <Compile Include="FileInformation.cs" />
-    <Compile Include="FileInformationQueue.cs" />
-    <Compile Include="FileSystemAccessService.cs" />
-    <Compile Include="IFilesystemAccess.cs" />
-    <Compile Include="IMessageQueue.cs" />
-    <Compile Include="MsmqMessageQueue.cs" />
+    <Compile Include="FileSystem\FileInformation.cs" />
+    <Compile Include="MessageQueue\FileInformationQueue.cs" />
+    <Compile Include="FileSystem\FileSystemAccessService.cs" />
+    <Compile Include="FileSystem\IFilesystemAccess.cs" />
+    <Compile Include="MessageQueue\IMessageQueue.cs" />
+    <Compile Include="MessageQueue\MsmqMessageQueue.cs" />
     <Compile Include="TreeWalker.cs" />
     <Compile Include="ViewModel\MainViewModel.cs" />
     <Compile Include="ViewModel\ViewModelLocator.cs" />
