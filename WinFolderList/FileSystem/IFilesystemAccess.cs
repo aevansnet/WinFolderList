@@ -15,5 +15,6 @@ namespace WinFolderList
         FileInformation GetFileInformation(string path);
         IEnumerable<string> GetFilesInDir(string path);
         IEnumerable<string> GetDirsInDir(string path);
+        bool DirectoryExists(string path);
     }
 }

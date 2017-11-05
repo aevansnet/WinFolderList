@@ -22,14 +22,21 @@ namespace WinFolderList
             return Directory.EnumerateDirectories(path);
         }
 
+        public bool DirectoryExists(string path)
+        {
+            return Directory.Exists(path);
+        }
+
         public FileInformation GetFileInformation(string path)
         {
             var fInfo = new FileInfo(path);
 
             return new FileInformation()
             {
-                Filename = path,
-                LastModified = fInfo.LastWriteTime
+                Filename = fInfo.Name,
+                FilePath = fInfo.DirectoryName,
+                LastModified = fInfo.LastWriteTime,
+                Size = fInfo.Length
             };
         }
     }

@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Threading;
 using Moq;
 
 namespace WinFolderList.Tests
@@ -14,6 +15,7 @@ namespace WinFolderList.Tests
     {
         private Mock<IFilesystemAccess> _fileSystemMock;
         private Mock<IMessageQueue<FileInformation>> _messageQueueMock;
+        private CancellationTokenSource _cancelationTokenSource;
 
         [TestInitialize]
         public void Init()
@@ -46,6 +48,8 @@ namespace WinFolderList.Tests
             _fileSystemMock.Setup(fs => fs.GetFileInformation(It.IsAny<string>()))
                 .Returns((string path) => new FileInformation() { Filename = path, Size = size++ });
 
+            _fileSystemMock.Setup(fs => fs.DirectoryExists(It.IsAny<string>())).Returns(true);
+
 
             _fileSystemMock.Setup(fs => fs.GetFilesInDir("SecurePath")).Throws<UnauthorizedAccessException>();
             _fileSystemMock.Setup(fs => fs.GetDirsInDir("SecurePath")).Throws<UnauthorizedAccessException>();
@@ -53,16 +57,31 @@ namespace WinFolderList.Tests
 
             _messageQueueMock = new Mock<IMessageQueue<FileInformation>>();
 
+            _cancelationTokenSource = new CancellationTokenSource();
+
+
         }
 
         [TestMethod()]
         public void CheckRecursion()
         {
             var walker = new TreeWalker(_fileSystemMock.Object, _messageQueueMock.Object);
-            walker.WalkTree("test");
+            walker.WalkTree("test", _cancelationTokenSource.Token);
 
             _fileSystemMock.Verify(fs => fs.GetDirsInDir(It.IsAny<string>()), Times.Exactly(4));
-            _messageQueueMock.Verify(mq => mq.Enqueue(It.IsAny<FileInformation>()), Times.Exactly(6));
+            _messageQueueMock.Verify(mq => mq.Enqueue(It.IsAny<FileInformation>()), Times.Exactly(6));            
+        }
+
+        [TestMethod()]
+        public void CheckCancelation()
+        {
+            _fileSystemMock.Setup(fs => fs.GetFilesInDir("Dir1")).Returns(new List<string>() { "File4", "File5" }).Callback(() => _cancelationTokenSource.Cancel());
+            var walker = new TreeWalker(_fileSystemMock.Object, _messageQueueMock.Object);
+            walker.WalkTree("test", _cancelationTokenSource.Token);
+
+            _fileSystemMock.Verify(fs => fs.GetDirsInDir(It.IsAny<string>()), Times.Exactly(3));
+            _messageQueueMock.Verify(mq => mq.Enqueue(It.IsAny<FileInformation>()), Times.Exactly(3));
+
         }
 
 
@@ -70,7 +89,7 @@ namespace WinFolderList.Tests
         public void CheckFileAccessExceptions()
         {
             var walker = new TreeWalker(_fileSystemMock.Object, _messageQueueMock.Object);
-            walker.WalkTree("SecurePath");
+            walker.WalkTree("SecurePath", new System.Threading.CancellationToken());
         }
 
 

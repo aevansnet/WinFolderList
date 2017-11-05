@@ -4,11 +4,12 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Threading;
 
 namespace WinFolderList
 {
     /// <summary>
-    /// Class to provide a 'tree walk' recursivley over a directory structure. File information will be published to a queue for processing    
+    /// Class to provide a 'tree walk' traversely over a directory structure. File information will be published to a queue for processing    
     /// </summary>
     public class TreeWalker
     {
@@ -18,27 +19,69 @@ namespace WinFolderList
         {
             _fs = fileSystem;
             _mq = publishQueue;
-        }   
+        }
 
-        public void WalkTree(string path)
+
+        /// <summary>
+        /// Walk the directory tree using the traverse method
+        /// </summary>
+        /// <param name="root">The root directory to start the traverse from</param>
+        /// <param name="cancelationToken">A cancellation token that should be used to cancel the traverse</param>
+        public void WalkTree(string root, CancellationToken cancelationToken)
         {
-            try
+
+            Stack<string> dirs = new Stack<string>();
+
+            if (!_fs.DirectoryExists(root))
             {
-                var fileInfo = _fs.GetFilesInDir(path).Select(f => _fs.GetFileInformation(f));
-                foreach (var info in fileInfo)
+                throw new ArgumentException("Root directory does not exist");
+            }
+            dirs.Push(root);
+
+            while (dirs.Count > 0 && !cancelationToken.IsCancellationRequested)
+            {
+                
+                try
                 {
-                    _mq.Enqueue(info);
+                    string currentDir = dirs.Pop();
+                    
+                    // scan through files in current directory                    
+
+                    var fileInfo = _fs.GetFilesInDir(currentDir).Select(f => _fs.GetFileInformation(f));
+                    foreach (var info in fileInfo)
+                    {
+                        if (cancelationToken.IsCancellationRequested)
+                            break;
+
+                        _mq.Enqueue(info);
+                    }
+
+                    // now scan through nested directories, and push them onto the stack for processing
+                    var subDirs = _fs.GetDirsInDir(currentDir);
+
+                    foreach (string str in subDirs)
+                    {
+                        if (cancelationToken.IsCancellationRequested)
+                            break;
+
+                        dirs.Push(str);
+                    }
                 }
 
-                var directories = _fs.GetDirsInDir(path);
-                foreach (var directory in directories)
+
+                catch (UnauthorizedAccessException e)
                 {
-                    WalkTree(directory);
+                    // todo: need to raise this up the call stack to log
+                    Console.WriteLine(e.Message);
+                    continue;
                 }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
+
+                catch (DirectoryNotFoundException e)
+                {
+                    // todo: need to raise this up the call stack to log
+                    Console.WriteLine(e.Message);
+                    continue;
+                }                       
             }
         }
     }
