@@ -13,7 +13,7 @@ namespace WinFolderList
     ///  An Msmq message queue which will enqueue and dequeue items of type T
     /// </summary>
     /// <typeparam name="T">Type of object to send through the queue</typeparam>
-    public abstract class MsmqMessageQueue<T> : IMessageQueue<T>
+    public abstract class MsmqMessageQueue<T> : IMessageQueue<T> , IDisposable
     {
 
         private MessageQueue _messageQueue;
@@ -73,6 +73,23 @@ namespace WinFolderList
                 .FirstOrDefault(s => s.ServiceName == "MSMQ");
 
             return msmqService != null && msmqService.Status == ServiceControllerStatus.Running;
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (disposing)
+            {          
+                // free managed resources     
+                _messageQueue.Close();
+            }
+            // free native resources if there are any
+          
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
         }
 
     }
