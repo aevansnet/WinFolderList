@@ -18,19 +18,38 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
         
-        <Grid>
+      
+
+        <ListView  ItemsSource="{Binding FileList}" DisplayMemberPath="FileName" Grid.Row="1">
+            <ListView.View>
+                <GridView>
+                    <GridViewColumn Header="Filename"  DisplayMemberBinding="{Binding FileName}" />
+                    <GridViewColumn Header="Path"  DisplayMemberBinding="{Binding FilePath}" />
+                    <GridViewColumn Header="Size" Width="50" DisplayMemberBinding="{Binding FileSize}" />
+                    <GridViewColumn Header="Last modified" Width="150" DisplayMemberBinding="{Binding LastModified}" />
+                </GridView>
+            </ListView.View>
+
+        </ListView>
+
+        <Grid Grid.Row="2" Margin="4">
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <TextBlock/>
-            <Button Grid.Column="1" Content="Browse" HorizontalAlignment="Right" VerticalAlignment="Top" Command="{Binding Browse}" IsEnabled="False"></Button>
-            <Button Grid.Column="2" Content="Scan" HorizontalAlignment="Right" VerticalAlignment="Top" Command="{Binding Scan}"></Button>
+            <TextBlock FontSize="16" Text="Path:" VerticalAlignment="Center"/>
+            <TextBox VerticalContentAlignment="Center" FontSize="16" Grid.Column="1" Text="{Binding ScanPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+
+            <Button FontSize="16" Grid.Column="2" Content="Browse" Visibility="Collapsed" HorizontalAlignment="Right" VerticalAlignment="Top" Command="{Binding Browse}" IsEnabled="False"></Button>
+            <Button FontSize="16" Grid.Column="3" Content="Scan" Padding="4" Margin="4" HorizontalAlignment="Right" VerticalAlignment="Top" Command="{Binding Scan}"></Button>
+            <Button FontSize="16" Grid.Column="4" Content="Cancel" Padding="4" Margin="4" HorizontalAlignment="Right" VerticalAlignment="Top" Command="{Binding Cancel}"></Button>
         </Grid>
-        
-        
-     
+
+
+
 
     </Grid>
 </Window>

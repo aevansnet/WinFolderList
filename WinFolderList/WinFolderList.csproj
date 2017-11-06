@@ -83,6 +83,7 @@
     <Compile Include="FileSystem\IFilesystemAccess.cs" />
     <Compile Include="MessageQueue\IMessageQueue.cs" />
     <Compile Include="MessageQueue\MsmqMessageQueue.cs" />
+    <Compile Include="Model\FileInformationModel.cs" />
     <Compile Include="TreeWalker.cs" />
     <Compile Include="ViewModel\MainViewModel.cs" />
     <Compile Include="ViewModel\ViewModelLocator.cs" />
@@ -131,7 +132,6 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Design\" />
-    <Folder Include="Model\" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

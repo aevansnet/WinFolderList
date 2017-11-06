@@ -23,6 +23,9 @@ namespace WinFolderList.ViewModel
                 //SimpleIoc.Default.Register<IDataService, DataService>();
             }
 
+            SimpleIoc.Default.Register<IMessageQueue<FileInformation>, FileInformationQueue>();
+            SimpleIoc.Default.Register<TreeWalker>();
+            SimpleIoc.Default.Register<IFilesystemAccess, FileSystemAccessService>();
             SimpleIoc.Default.Register<MainViewModel>();
         }
 
