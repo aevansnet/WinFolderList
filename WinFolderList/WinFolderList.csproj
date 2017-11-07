@@ -87,6 +87,7 @@
     <Compile Include="MessageQueue\MsmqMessageQueue.cs" />
     <Compile Include="Model\FileInformationModel.cs" />
     <Compile Include="TreeWalker.cs" />
+    <Compile Include="UIDispatcher.cs" />
     <Compile Include="ViewModel\MainViewModel.cs" />
     <Compile Include="ViewModel\ViewModelLocator.cs" />
     <Page Include="MainWindow.xaml">
