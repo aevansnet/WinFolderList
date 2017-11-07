@@ -14,7 +14,8 @@ namespace WinFolderList
     public class TreeWalker
     {
         private readonly IFilesystemAccess _fs;
-        private readonly IMessageQueue<FileInformation> _mq;
+        private readonly IMessageQueue<FileInformation> _mq;        
+ 
         public TreeWalker(IFilesystemAccess fileSystem, IMessageQueue<FileInformation> publishQueue)
         {
             _fs = fileSystem;
@@ -27,14 +28,14 @@ namespace WinFolderList
         /// </summary>
         /// <param name="root">The root directory to start the traverse from</param>
         /// <param name="cancelationToken">A cancellation token that should be used to cancel the traverse</param>
-        public void WalkTree(string root, CancellationToken cancelationToken)
+        public long WalkTree(string root, CancellationToken cancelationToken, Action<string> onError)
         {
-
+            long fileCount = 0;
             Stack<string> dirs = new Stack<string>();
 
             if (!_fs.DirectoryExists(root))
             {
-                throw new ArgumentException("Root directory does not exist");
+                onError("Root directory does not exist");
             }
             dirs.Push(root);
 
@@ -44,7 +45,7 @@ namespace WinFolderList
                 try
                 {
                     string currentDir = dirs.Pop();
-                    
+
                     // scan through files in current directory                    
 
                     var fileInfo = _fs.GetFilesInDir(currentDir).Select(f => _fs.GetFileInformation(f));
@@ -54,6 +55,7 @@ namespace WinFolderList
                             break;
 
                         _mq.Enqueue(info);
+                        fileCount++;
                     }
 
                     // now scan through nested directories, and push them onto the stack for processing
@@ -72,17 +74,27 @@ namespace WinFolderList
                 catch (UnauthorizedAccessException e)
                 {
                     // todo: need to raise this up the call stack to log
-                    Console.WriteLine(e.Message);
+                    onError(e.Message);
                     continue;
                 }
 
                 catch (DirectoryNotFoundException e)
                 {
                     // todo: need to raise this up the call stack to log
-                    Console.WriteLine(e.Message);
+                    onError(e.Message);
                     continue;
                 }                       
             }
-        }
+            if (cancelationToken.IsCancellationRequested)
+                return 0;
+            else
+            {
+                _mq.Enqueue(new FileInformation
+                {
+                    LastFile = true
+                }); // effectively a blank file message to signify end of list. Dont like doing this - re-address
+                return fileCount;
+            }
+        }     
     }
 }

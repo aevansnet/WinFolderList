@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Windows.Media;
 
 namespace WinFolderList
 {
@@ -23,5 +24,10 @@ namespace WinFolderList
         /// </summary>
         /// <returns>The message</returns>
         T Dequeue();
+
+        /// <summary>
+        /// Clear all pending messages off of the queue
+        /// </summary>
+        void Clear();
     }
 }

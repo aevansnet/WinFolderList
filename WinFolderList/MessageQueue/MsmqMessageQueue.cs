@@ -65,6 +65,13 @@ namespace WinFolderList
             }
         }
 
+        public void Clear()
+        {
+            // purge the messages from the message queue. 
+            // make sure this is thread safe
+            _messageQueue.Purge();
+        }
+
         private bool CheckForService()
         {
             // crudely check if msmq is installed and running..

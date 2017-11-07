@@ -16,6 +16,7 @@ namespace WinFolderList.Tests
         private Mock<IFilesystemAccess> _fileSystemMock;
         private Mock<IMessageQueue<FileInformation>> _messageQueueMock;
         private CancellationTokenSource _cancelationTokenSource;
+        private Mock<Action<string>>  _errorHandlerMock;
 
         [TestInitialize]
         public void Init()
@@ -59,6 +60,8 @@ namespace WinFolderList.Tests
 
             _cancelationTokenSource = new CancellationTokenSource();
 
+            _errorHandlerMock = new Mock<Action<string>>();
+           
 
         }
 
@@ -66,10 +69,12 @@ namespace WinFolderList.Tests
         public void CheckRecursion()
         {
             var walker = new TreeWalker(_fileSystemMock.Object, _messageQueueMock.Object);
-            walker.WalkTree("test", _cancelationTokenSource.Token);
+            var fileCount = walker.WalkTree("test", _cancelationTokenSource.Token, _errorHandlerMock.Object);
 
             _fileSystemMock.Verify(fs => fs.GetDirsInDir(It.IsAny<string>()), Times.Exactly(4));
-            _messageQueueMock.Verify(mq => mq.Enqueue(It.IsAny<FileInformation>()), Times.Exactly(6));            
+            _messageQueueMock.Verify(mq => mq.Enqueue(It.IsAny<FileInformation>()), Times.Exactly(7)); // 6 files with one end of list message
+
+            Assert.AreEqual(fileCount, 6);
         }
 
         [TestMethod()]
@@ -77,10 +82,12 @@ namespace WinFolderList.Tests
         {
             _fileSystemMock.Setup(fs => fs.GetFilesInDir("Dir1")).Returns(new List<string>() { "File4", "File5" }).Callback(() => _cancelationTokenSource.Cancel());
             var walker = new TreeWalker(_fileSystemMock.Object, _messageQueueMock.Object);
-            walker.WalkTree("test", _cancelationTokenSource.Token);
+            var fileCount = walker.WalkTree("test", _cancelationTokenSource.Token, _errorHandlerMock.Object);
 
             _fileSystemMock.Verify(fs => fs.GetDirsInDir(It.IsAny<string>()), Times.Exactly(3));
-            _messageQueueMock.Verify(mq => mq.Enqueue(It.IsAny<FileInformation>()), Times.Exactly(3));
+            _messageQueueMock.Verify(mq => mq.Enqueue(It.IsAny<FileInformation>()), Times.Exactly(3)); // 3 files with no end of file list message
+
+            Assert.AreEqual(fileCount, 0);  // we do not expect to get a file count if we were cancelled
 
         }
 
@@ -89,7 +96,8 @@ namespace WinFolderList.Tests
         public void CheckFileAccessExceptions()
         {
             var walker = new TreeWalker(_fileSystemMock.Object, _messageQueueMock.Object);
-            walker.WalkTree("SecurePath", new System.Threading.CancellationToken());
+            walker.WalkTree("SecurePath", new System.Threading.CancellationToken(), _errorHandlerMock.Object);
+            _errorHandlerMock.Verify(a => a(It.IsAny<string>()), Times.AtLeastOnce);
         }
 
 

@@ -1,8 +1,9 @@
 ﻿using System;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.Windows.Threading;
 using WinFolderList.Model;
 using GalaSoft.MvvmLight;
 using GalaSoft.MvvmLight.CommandWpf;
@@ -16,20 +17,58 @@ namespace WinFolderList.ViewModel
     public class MainViewModel : ViewModelBase
     { 
 
-
-
-        public RelayCommand Browse { get; set; }
-
-        public RelayCommand Scan { get; set; }
-
-        public RelayCommand Cancel { get; set; }
-
-        public ObservableCollection<FileInformationModel> FileList { get; set; }
-
+        // DI injected fields
         private TreeWalker _treeWalker;
         private IMessageQueue<FileInformation> _subscribeQueue;
-        private CancellationTokenSource _scanCancelationTokenSource;
+        private IFilesystemAccess _fs;
 
+        // producer/consumer fields
+        private Task _msmqConsumer;
+        private CancellationTokenSource _msmqConsumerCancellationTokenSource;
+        private CancellationTokenSource _scanCancelationTokenSource;
+        private long _producerFileCount;
+
+
+        #region Bindable properties
+
+        /// <summary>
+        /// Command to initiate a directory scan. Is executable for a given 'ScanPath'
+        /// </summary>
+        public RelayCommand Scan { get; set; }
+
+        /// <summary>
+        /// Command to cancel an in-progress scan. Is executable while scan in progress.
+        /// </summary>
+        public RelayCommand Cancel { get; set; }
+
+        /// <summary>
+        /// An observable list show directory scan results.
+        /// </summary>
+        public ObservableCollection<FileInformationModel> FileList { get; set; }
+
+        /// <summary>
+        /// An observable list of log items
+        /// </summary>
+        public ObservableCollection<string> ErrorList { get; set; }
+
+        /// <summary>
+        /// Indicator of progress though the directory scan
+        ///  </summary>
+        private int _progress;
+        public int Progress
+        {
+            get { return _progress; }
+            set
+            {
+                _progress = value;
+                RaisePropertyChanged();
+
+            }
+        }
+
+        /// <summary>
+        /// Root path to initiate the scan from.
+        ///  </summary>
         private string _scanPath = "";
         public string ScanPath
         {
@@ -46,18 +85,9 @@ namespace WinFolderList.ViewModel
         }
 
 
-
-        private bool _pathEnabled;
-        public bool PathEnabled {
-            get { return _pathEnabled; }
-            set
-            {
-                _pathEnabled = value;
-                RaisePropertyChanged();
-            }
-        }
-
-
+        /// <summary>
+        /// Boolean to show that a scan is in progress
+        /// </summary>
         private bool _scanInProgress;
         public bool ScanInProgress
         {
@@ -70,42 +100,40 @@ namespace WinFolderList.ViewModel
             }
         }
 
+        #endregion
+
 
         /// <summary>
         /// Initializes a new instance of the MainViewModel class.
         /// </summary>
-        public MainViewModel(TreeWalker treeWalker, IMessageQueue<FileInformation> subscribeQueue)
+        /// <param name="fs">Filesystem accessor</param>
+        /// <param name="treeWalker">Filesystem accessor</param>
+        public MainViewModel(TreeWalker treeWalker,IFilesystemAccess fs, IMessageQueue<FileInformation> subscribeQueue)
         {
+            // accept injected dependencies
             _treeWalker = treeWalker;
             _subscribeQueue = subscribeQueue;
+            _fs = fs;
 
-            Browse = new RelayCommand(OnBrowseClicked);
             Scan = new RelayCommand(OnScanClicked, ScanCanExecute);
             Cancel = new RelayCommand(OnCancelClicked, CancelCanExecute);
-            FileList = new ObservableCollection<FileInformationModel>();
+            ErrorList = new ObservableCollection<string>();
 
-            //var _mq = new FileInformationQueue();
-
-
+            FileList = new ObservableCollection<FileInformationModel>();            
+            FileList.CollectionChanged += FileListOnCollectionChanged;
 
 
         }
 
-        private bool ScanCanExecute()
+        private void FileListOnCollectionChanged(object sender, NotifyCollectionChangedEventArgs notifyCollectionChangedEventArgs)
         {
-
-            if (ScanInProgress)
+            // Update on the progress if we can
+            if (_producerFileCount > 0)
             {
-                return false;
+                float progress = (float)FileList.Count / (float)_producerFileCount;
+                // should already be back onto the UI thread by the updater
+                Progress = (int)(progress * 100);
             }
-
-            if (!string.IsNullOrEmpty(ScanPath) && Directory.Exists(ScanPath))
-            {
-                return true;
-            }
-
-
-            return false;
         }
 
 
@@ -117,83 +145,164 @@ namespace WinFolderList.ViewModel
 
         private void OnCancelClicked()
         {
-            if(_scanCancelationTokenSource != null)
+            // cancel the producer 
+            _scanCancelationTokenSource?.Cancel();
+
+            // now clear the consumer queue
+            _subscribeQueue.Clear();
+
+            DispatcherHelper.CheckBeginInvokeOnUI(() => ScanInProgress = false);
+        }
+
+        /// <summary>
+        /// Delegate to report on if a scan can be executed
+        /// </summary>
+        /// <returns>Boolean describing can execute status</returns>
+        private bool ScanCanExecute()
+        {
+            // Do we have a valid path, and are we ready to initiate a scan?
+            if (ScanInProgress)
             {
-                _scanCancelationTokenSource.Cancel();
+                return false;
             }
 
-        }
-        
-
-
-        public void OnBrowseClicked()
-        {
-           
+            if (!string.IsNullOrEmpty(ScanPath) && _fs.DirectoryExists(ScanPath))
+            {
+                return true;
+            }
+            return false;
         }
 
+        /// <summary>
+        /// Initiate a scan
+        /// </summary>
         private void OnScanClicked()
         {
+            // User has executed a scan.
+
+            // Clear the current file list, and log that we are starting a scan.
             DispatcherHelper.CheckBeginInvokeOnUI(() => FileList.Clear());
-            Task.Run(() =>
-            {
-                while (true)
-                {
-                    var fileInfo = _subscribeQueue.Dequeue();
-                    DispatcherHelper.CheckBeginInvokeOnUI(() =>
-                    {
-                        FileList.Add(new FileInformationModel() { FileName = fileInfo.Filename, FilePath= fileInfo.FilePath, FileSize = fileInfo.Size, LastModified = fileInfo.LastModified });
-                        //Console.WriteLine(fileInfo.Filename);
-                    });
-                }
-            });
+            OnLog($"Scan Starting for {ScanPath}");
+
+            // Check that our msmq consumer is running.
+            _msmqConsumerCancellationTokenSource = new CancellationTokenSource();  // todo: move to field?
+            CheckStartMsmqConsumer(_msmqConsumerCancellationTokenSource.Token);
+
+            // Signal to the UI scan is in progress.
+            DispatcherHelper.CheckBeginInvokeOnUI(() => ScanInProgress = true);
+
+            // Now start the msmq producer
+            _producerFileCount = 0;
+            _scanCancelationTokenSource = new CancellationTokenSource();
+            CreateMsmqScanProducer(_scanCancelationTokenSource);
+
+        }
 
 
-            var cts = new CancellationTokenSource();
-            _scanCancelationTokenSource = cts;
-           
-            
+        /// <summary>
+        /// Accecpt a string to log, then use the UI thread to push it onto the log list.
+        /// </summary>
+        /// <param name="s">The string to log</param>
+        private void OnLog(string s)
+        {
+            DispatcherHelper.CheckBeginInvokeOnUI(() => ErrorList.Add(s));
+        }
 
-
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="cts"></param>
+        private void CreateMsmqScanProducer(CancellationTokenSource cts)
+        {
             try
             {
                 Task.Run(() =>
-                {
-                    cts.Token.ThrowIfCancellationRequested();
-                    DispatcherHelper.CheckBeginInvokeOnUI(() => ScanInProgress = true);                   
-                    _treeWalker.WalkTree(ScanPath, cts.Token);
-                    cts.Token.ThrowIfCancellationRequested();
-                },
+                    {
+                        // exit if we are already cancelled
+                        cts.Token.ThrowIfCancellationRequested();
+                        _producerFileCount = _treeWalker.WalkTree(ScanPath, cts.Token, OnLog);
+                        cts.Token.ThrowIfCancellationRequested();
+                    },
 
-            cts.Token).ContinueWith(t =>
-            {
-                DispatcherHelper.CheckBeginInvokeOnUI(() => ScanInProgress = false);
-                if (t.IsFaulted)
+                    cts.Token).ContinueWith(t =>
                 {
-                    // log the exception
-                }
-                if (t.IsCanceled)
-                {
-                    // log the cancelation
-                }
-            });
+                    if (t.IsCanceled)
+                    {
+                        DispatcherHelper.CheckBeginInvokeOnUI(() => ScanInProgress = false);
+                        OnLog("Scan Cancelled");
+                    }
+                    else if (t.IsCompleted)
+                    {
+                        OnLog($"Producer walk Completed for {_producerFileCount} files.");
+                    }
+                    else if(t.IsFaulted)
+                    {
+                        OnLog("Scan Faulted");
+                    }
+                });
             }
             catch (AggregateException e)
             {
                 foreach (var v in e.InnerExceptions)
-                    Console.WriteLine(e.Message + " " + v.Message);
-            }
-            finally
-            {
-                //_scanCancelationTokenSource.Dispose();
+                {
+                    OnLog(e.Message + " " + v.Message);
+                }
             }
 
         }
 
-        ////public override void Cleanup()
-        ////{
-        ////    // Clean up if needed
+        private void CheckStartMsmqConsumer(CancellationToken ct)
+        {
+            // attempt to start the msmq consumer if its not already created and running.
+            // (by means of a 'never-ending' task.
+       
+            if (_msmqConsumer != null && _msmqConsumer.Status == TaskStatus.Running)
+            {
+                return;
+            }
 
-        ////    base.Cleanup();
-        ////}
+            _msmqConsumer = new Task(() =>
+            {
+                while (true)
+                {
+                    var fileInfo = _subscribeQueue.Dequeue();
+                    if (fileInfo.LastFile)
+                    {
+                        OnLog("Scan Completed");
+                        DispatcherHelper.CheckBeginInvokeOnUI(() => ScanInProgress = false); // Scan fully completed. 
+                    }
+                    else
+                    {
+                        DispatcherHelper.UIDispatcher.Invoke(() =>
+                        {
+                            FileList.Add(new FileInformationModel()
+                            {
+                                FileName = fileInfo.Filename,
+                                FilePath = fileInfo.FilePath,
+                                FileSize = fileInfo.Size,
+                                LastModified = fileInfo.LastModified
+                            });
+                        }, DispatcherPriority.ApplicationIdle, ct);
+
+                        ct.ThrowIfCancellationRequested();
+                    }
+                }
+            }, ct, TaskCreationOptions.LongRunning);
+
+            _msmqConsumer.ContinueWith(x =>
+            {
+                OnLog("Msmq Consumer finished");
+            });
+
+            _msmqConsumer.Start();
+
+        }
+
+        public override void Cleanup()
+        { 
+            // stop the consumer loop.
+            _msmqConsumerCancellationTokenSource.Cancel();
+            base.Cleanup();
+        }
     }
 }
