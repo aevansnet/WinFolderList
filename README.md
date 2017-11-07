@@ -19,6 +19,8 @@ Scroll viewer of grid and log viewer will lock to bottom in the same style as th
 
 Items in the grid and log viewer are laid up in a virtualising stack panel, so reduce the memory foot print for large scans. (only the model, and not the UI element of each file willl be stored in memory)
 
+There is no 'folder select' dialog. This doesn't actually exist in the wpf framework so needs to be imported from winforms. Also, from an mvvm 'purist' point of view, the implementaion of this is currently to time consuming for this project.
+
 
 What i'm not happy about, and would like to re-address
 ======================================================
