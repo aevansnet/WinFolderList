@@ -31,3 +31,4 @@ The last message I put onto the message queue is a dummy file to signal the end.
 
 I started this project as ‘Test Driven’ but it quickly resorted to creating unit tests after code. There was a lot of change in strategy at the beginning, and I’ve only had limited pockets of time to work on this.
 
+My commit pattern for this project has been relatively 'chaotic' so far. I'm fairly new to GIT and have missed some of the tfs features. I have also been working from a few different machines, as and when i've had the chance.
