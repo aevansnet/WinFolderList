@@ -8,6 +8,10 @@ using System.Windows.Controls;
 
 namespace WinFolderList.Controls
 {
+
+    /// <summary>
+    /// Class to provide an attached property for a scrollviewer, to enable auto scrolling
+    /// </summary>
     public class ScrollViewEx
     {
 
